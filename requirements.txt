@@ -1,0 +1,4 @@
+plotly
+dash
+dash-bootstrap-components
+dash-cytoscape
