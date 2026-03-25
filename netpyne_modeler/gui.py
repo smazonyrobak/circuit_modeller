@@ -71,9 +71,6 @@ NEURON_SLIDER_SPECS = {
     "duration_ms": SliderSpec(5.0, 500.0, 1.0, digits=1),
     "dt_ms": SliderSpec(0.005, 0.2, 0.001, digits=3),
     "v_rest_mV": SliderSpec(-100.0, 20.0, 0.5, digits=1),
-    "cm_uF_cm2": SliderSpec(0.1, 5.0, 0.05, digits=2),
-    "gna_mS_cm2": SliderSpec(0.0, 500.0, 1.0, digits=1),
-    "gk_mS_cm2": SliderSpec(0.0, 200.0, 0.5, digits=1),
     "gl_mS_cm2": SliderSpec(0.0, 5.0, 0.01, digits=3),
     "ena_mV": SliderSpec(20.0, 100.0, 0.5, digits=2),
     "ek_mV": SliderSpec(-120.0, -20.0, 0.5, digits=2),
@@ -309,9 +306,6 @@ class ClampExplorerApp:
             "dt_ms": tk.StringVar(),
             "v_rest_mV": tk.StringVar(),
             "holding_current": tk.StringVar(),
-            "cm_uF_cm2": tk.StringVar(),
-            "gna_mS_cm2": tk.StringVar(),
-            "gk_mS_cm2": tk.StringVar(),
             "gl_mS_cm2": tk.StringVar(),
             "ena_mV": tk.StringVar(),
             "ek_mV": tk.StringVar(),
@@ -428,9 +422,6 @@ class ClampExplorerApp:
             ("Duration (ms)", "duration_ms"),
             ("dt (ms)", "dt_ms"),
             ("Initial V (mV)", "v_rest_mV"),
-            ("Cm (uF/cm2)", "cm_uF_cm2"),
-            ("gNa (mS/cm2)", "gna_mS_cm2"),
-            ("gK (mS/cm2)", "gk_mS_cm2"),
             ("gL (mS/cm2)", "gl_mS_cm2"),
             ("ENa (mV)", "ena_mV"),
             ("EK (mV)", "ek_mV"),
@@ -475,7 +466,7 @@ class ClampExplorerApp:
             neuron_frame,
             text=(
                 "Chloride reversal is derived from Cl_i and Cl_o. "
-                "For now the imported morphology uses uniform HH-style active membrane plus chloride/shunt conductances across all sections."
+                "The imported morphology now uses a fixed region-specific passive scaffold with deterministic AIS, axon, soma, basal, apical, and hotzone assignments."
             ),
             wraplength=580,
             justify="left",
@@ -754,9 +745,6 @@ class ClampExplorerApp:
             holding_mV=self.neuron_config.holding_mV,
             current_injection_unit=self.current_unit_var.get(),
             holding_current=float(self.neuron_vars["holding_current"].get()),
-            cm_uF_cm2=float(self.neuron_vars["cm_uF_cm2"].get()),
-            gna_mS_cm2=float(self.neuron_vars["gna_mS_cm2"].get()),
-            gk_mS_cm2=float(self.neuron_vars["gk_mS_cm2"].get()),
             gl_mS_cm2=float(self.neuron_vars["gl_mS_cm2"].get()),
             ena_mV=float(self.neuron_vars["ena_mV"].get()),
             ek_mV=float(self.neuron_vars["ek_mV"].get()),

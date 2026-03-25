@@ -28,16 +28,30 @@ PANEL_TRACE_COLORS = {
     "I_Cl": "#8b5cf6",
     "I_shunt": "#f97316",
     "I_inhib_total": "#6b7280",
+    "I_h": "#7c3aed",
+    "I_KA": "#b45309",
+    "I_Ca_LVA": "#0891b2",
     "g_Na": "#06b6d4",
     "g_K": "#84cc16",
     "g_leak": "#ef4444",
     "g_Cl": "#8b5cf6",
     "g_shunt": "#f97316",
     "g_inhib_total": "#6b7280",
+    "g_Ih": "#7c3aed",
+    "g_KA": "#b45309",
+    "g_Ca_LVA": "#0891b2",
     "m": "#ef4444",
     "h": "#22c55e",
     "n": "#2563eb",
+    "m_Ih": "#7c3aed",
+    "m_KA": "#b45309",
+    "h_KA": "#92400e",
+    "m_Ca_LVA": "#0891b2",
+    "h_Ca_LVA": "#155e75",
+    "cai_mM": "#0f766e",
 }
+
+PROBABILITY_GATING_KEYS = {"m", "h", "n", "m_Ih", "m_KA", "h_KA", "m_Ca_LVA", "h_Ca_LVA"}
 
 
 def _ensure_output_dir() -> Path:
@@ -93,6 +107,34 @@ def _downsample_series(
         _rounded([x_values[index] for index in selected_indices]),
         _rounded([y_values[index] for index in selected_indices]),
     )
+
+
+def _compress_step_series(
+    x_values: list[float],
+    y_values: list[float],
+) -> tuple[list[float], list[float]]:
+    if not x_values or not y_values:
+        return x_values, y_values
+    if len(x_values) != len(y_values):
+        raise ValueError("Step series x/y lengths must match.")
+
+    compressed_x = [float(x_values[0])]
+    compressed_y = [float(y_values[0])]
+    for index in range(1, len(x_values)):
+        previous_value = float(y_values[index - 1])
+        current_value = float(y_values[index])
+        current_time = float(x_values[index])
+        if current_value != previous_value:
+            compressed_x.append(current_time)
+            compressed_y.append(previous_value)
+            compressed_x.append(current_time)
+            compressed_y.append(current_value)
+    final_time = float(x_values[-1])
+    final_value = float(y_values[-1])
+    if compressed_x[-1] != final_time or compressed_y[-1] != final_value:
+        compressed_x.append(final_time)
+        compressed_y.append(final_value)
+    return _rounded(compressed_x), _rounded(compressed_y)
 
 
 def _base_figure(
@@ -172,6 +214,7 @@ def _add_trace(
     name: str,
     color: str | None,
     max_points_per_trace: int | None,
+    step_like: bool = False,
 ):
     trace_kwargs = {
         "mode": "lines",
@@ -179,6 +222,10 @@ def _add_trace(
     }
     if color:
         trace_kwargs["line"] = {"color": color, "width": 2}
+    if step_like:
+        step_x, step_y = _compress_step_series(x_values, y_values)
+        figure.add_trace(go.Scattergl(x=step_x, y=step_y, **trace_kwargs))
+        return
     if FigureResampler is not None and isinstance(figure, FigureResampler):
         sampled_x, sampled_y = _downsample_series(x_values, y_values, min(max_points_per_trace or LIVE_DASHBOARD_MAX_POINTS, 800))
         figure.add_trace(
@@ -203,7 +250,9 @@ def _panel_specifications(result: SimulationResult, selected_panels: set[str] | 
     if "ionic_currents" in panels and result.ionic_currents_uA_cm2:
         specs.append(("ionic_currents", "Ionic Currents", "uA/cm2", list(result.ionic_currents_uA_cm2.items()), None, 220))
     if "gating" in panels and result.gating_variables:
-        specs.append(("gating", "Gating Variables", "Probability", list(result.gating_variables.items()), [-0.02, 1.02], 220))
+        gating_traces = list(result.gating_variables.items())
+        fixed_range = [-0.02, 1.02] if all(key in PROBABILITY_GATING_KEYS for key, _ in gating_traces) else None
+        specs.append(("gating", "Gating Variables", "State", gating_traces, fixed_range, 220))
     if "conductances" in panels and result.conductances_mS_cm2:
         specs.append(("conductances", "Conductances", "mS/cm2", list(result.conductances_mS_cm2.items()), None, 220))
     return specs
@@ -239,6 +288,7 @@ def build_trace_panel_figures(
                 trace_name,
                 color,
                 max_points_per_trace,
+                step_like=panel_key in {"applied_trace", "command_trace"},
             )
         if panel_key == "voltage":
             figure.add_annotation(

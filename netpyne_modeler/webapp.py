@@ -48,13 +48,12 @@ from .simulator import (
     simulate_voltage_clamp,
 )
 
-
 PLOT_PANEL_LABELS = {
     "applied_trace": "Applied current trace",
     "command_trace": "Stimulus / command trace",
-    "ionic_currents": "I_Na, I_K, I_leak, I_Cl, I_shunt",
-    "gating": "m, h, n gating variables",
-    "conductances": "g_Na, g_K, g_leak, g_Cl, g_shunt",
+    "ionic_currents": "I_Na, I_K, I_leak, I_Cl, I_shunt, I_h, I_KA, I_Ca_LVA",
+    "gating": "m, h, n, I_h, K_A, Ca_LVA gating variables",
+    "conductances": "g_Na, g_K, g_leak, g_Cl, g_shunt, g_Ih, g_KA, g_Ca_LVA",
 }
 PLOT_PANEL_DEFAULTS = {
     "applied_trace": True,
@@ -72,6 +71,14 @@ RECORDING_SOURCE_OPTIONS = [
     {"label": "Neuron output site", "value": "output"},
 ]
 
+ASSIGN_MODE_OPTIONS = [
+    {"label": "Selected train", "value": "train"},
+    {"label": "Patch / voltage clamp site", "value": "record"},
+    {"label": "F-I site", "value": "fi"},
+    {"label": "Neuron output", "value": "output"},
+    {"label": "Selected connection input", "value": "connection_target"},
+]
+
 SECTION_COLORS = {
     "soma": "#1f2937",
     "axon": "#ea580c",
@@ -85,16 +92,13 @@ NEURON_FIELDS = [
     ("v_rest_mV", "Initial V (mV)", -100.0, 20.0, 0.5),
     ("holding_mV", "Holding V (mV)", -120.0, 40.0, 0.5),
     ("holding_current", "Holding current", -20.0, 20.0, 0.05),
-    ("cm_uF_cm2", "Cm (uF/cm2)", 0.1, 5.0, 0.05),
-    ("gna_mS_cm2", "gNa (mS/cm2)", 0.0, 500.0, 1.0),
-    ("gk_mS_cm2", "gK (mS/cm2)", 0.0, 200.0, 0.5),
-    ("gl_mS_cm2", "gL (mS/cm2)", 0.0, 5.0, 0.01),
+    ("gl_mS_cm2", "Base g_pas soma (mS/cm2)", 0.0, 5.0, 0.01),
     ("ena_mV", "ENa (mV)", 20.0, 100.0, 0.5),
     ("ek_mV", "EK (mV)", -120.0, -20.0, 0.5),
-    ("eleak_mV", "E_leak (mV)", -100.0, 20.0, 0.5),
+    ("eleak_mV", "E_pas / leak (mV)", -120.0, 20.0, 0.5),
     ("ecl_mV", "E_Cl (mV)", -120.0, 20.0, 0.5),
-    ("gcl_mS_cm2", "gCl (mS/cm2)", 0.0, 5.0, 0.01),
-    ("gshunt_mS_cm2", "g_shunt (mS/cm2)", 0.0, 5.0, 0.01),
+    ("gcl_mS_cm2", "Background gCl (mS/cm2)", 0.0, 5.0, 0.01),
+    ("gshunt_mS_cm2", "Background g_shunt (mS/cm2)", 0.0, 5.0, 0.01),
 ]
 
 FI_FIELDS = [
@@ -778,9 +782,6 @@ def _build_neuron_from_values(values: dict[str, object], unit: str) -> NeuronCon
         holding_mV=_coerce_float(values.get("holding_mV"), template.holding_mV),
         current_injection_unit=unit,
         holding_current=_coerce_float(values.get("holding_current"), template.holding_current),
-        cm_uF_cm2=_coerce_float(values.get("cm_uF_cm2"), template.cm_uF_cm2),
-        gna_mS_cm2=_coerce_float(values.get("gna_mS_cm2"), template.gna_mS_cm2),
-        gk_mS_cm2=_coerce_float(values.get("gk_mS_cm2"), template.gk_mS_cm2),
         gl_mS_cm2=_coerce_float(values.get("gl_mS_cm2"), template.gl_mS_cm2),
         ena_mV=_coerce_float(values.get("ena_mV"), template.ena_mV),
         ek_mV=_coerce_float(values.get("ek_mV"), template.ek_mV),
@@ -1223,13 +1224,7 @@ def create_app() -> Dash:
                                                                         html.Div("Assignment mode", className="site-label"),
                                                                         dbc.RadioItems(
                                                                             id="assign-mode",
-                                                                            options=[
-                                                                                {"label": "Selected train", "value": "train"},
-                                                                                {"label": "Recording patch", "value": "record"},
-                                                                                {"label": "F-I site", "value": "fi"},
-                                                                                {"label": "Neuron output", "value": "output"},
-                                                                                {"label": "Selected connection input", "value": "connection_target"},
-                                                                            ],
+                                                                            options=ASSIGN_MODE_OPTIONS,
                                                                             value="train",
                                                                             className="compact-option-list",
                                                                         ),
@@ -1310,6 +1305,8 @@ def create_app() -> Dash:
                                                     ),
                                                     html.Div("Dedicated patch", className="site-label"),
                                                     html.Div(id="recording-site-text", className="site-value mb-2"),
+                                                    html.Div("Voltage clamp patch", className="site-label"),
+                                                    html.Div(id="vclamp-site-text", className="site-value mb-2"),
                                                     html.Div("Active recording source", className="site-label"),
                                                     html.Div(id="active-recording-source-text", className="site-value mb-2"),
                                                     html.Div("F-I site", className="site-label"),
@@ -1371,7 +1368,7 @@ def create_app() -> Dash:
                                                 title="Voltage clamp",
                                                 children=[
                                                     html.Div(
-                                                        "Voltage clamp runs on the selected neuron in isolation at the selected patch site.",
+                                                        "Voltage clamp runs on the selected neuron in isolation at the dedicated patch site selected on the morphology.",
                                                         className="panel-help-text",
                                                     ),
                                                     dash_table.DataTable(
@@ -1421,7 +1418,7 @@ def create_app() -> Dash:
                                                 [
                                                     html.Div(id="selected-neuron-heading", className="panel-section-title"),
                                                     html.Div(
-                                                        "Click a sampled membrane point to place the selected train, recording patch, F-I site, neuron output, or the selected incoming connection target.",
+                                                        "Click a sampled membrane point to place the selected train, the patch / voltage-clamp site, the F-I site, the neuron output, or the selected incoming connection target.",
                                                         className="panel-help-text",
                                                     ),
                                                     dbc.Switch(
@@ -1598,6 +1595,7 @@ def create_app() -> Dash:
         Output("selected-incoming-connection", "value"),
         Output("recording-source-mode", "value"),
         Output("recording-site-text", "children"),
+        Output("vclamp-site-text", "children"),
         Output("active-recording-source-text", "children"),
         Output("fi-site-text", "children"),
         Output("output-site-text", "children"),
@@ -1647,6 +1645,7 @@ def create_app() -> Dash:
             selected_incoming_connection,
             neuron.recording_source_mode,
             _format_site(neuron.recording_site),
+            _format_site(neuron.recording_site or default_recording_site(neuron.morphology_name)),
             f"{recording_source_label}: {recording_source_text}",
             _format_site(neuron.fi_site),
             _format_site(neuron.output_site),
@@ -2086,18 +2085,21 @@ def create_app() -> Dash:
         )
 
     @app.callback(
-        Output("vclamp-figures-store", "data"),
+        Output("vclamp-graph-voltage", "figure"),
+        Output("vclamp-graph-applied_trace", "figure"),
+        Output("vclamp-graph-command_trace", "figure"),
+        Output("vclamp-graph-ionic_currents", "figure"),
+        Output("vclamp-graph-gating", "figure"),
+        Output("vclamp-graph-conductances", "figure"),
         Output("results-tabs", "active_tab", allow_duplicate=True),
         Output("status-banner", "children", allow_duplicate=True),
         Input("run-vclamp", "n_clicks"),
         State("circuit-store", "data"),
         State("selected-neuron-id", "data"),
         State("plot-panels", "value"),
-        State("selected-connection-id", "data"),
-        State("train-table", "selected_rows"),
         prevent_initial_call=True,
     )
-    def run_voltage_clamp(n_clicks, project_data, selected_neuron_id, plot_panels, selected_connection_id, train_selected_rows):
+    def run_voltage_clamp(n_clicks, project_data, selected_neuron_id, plot_panels):
         if not n_clicks:
             raise PreventUpdate
         project = _project_from_dict(project_data)
@@ -2110,27 +2112,27 @@ def create_app() -> Dash:
         if not trains:
             _, trains = default_setup(VOLTAGE_CLAMP, neuron.morphology_name)
             used_default_step = True
-        effective_recording_site, recording_source_label, recording_source_text = _resolve_recording_site(
-            project,
-            neuron,
-            selected_connection_id,
-            train_selected_rows,
-        )
+        vclamp_site = neuron.recording_site or default_recording_site(neuron.morphology_name)
         start_time = time.perf_counter()
         result = simulate_voltage_clamp(
             neuron.neuron_config,
             trains,
-            recording_site=effective_recording_site,
+            recording_site=vclamp_site,
             morphology_name=neuron.morphology_name,
         )
         figures = build_trace_panel_figures(result, selected_panels, theme="light")
         elapsed = time.perf_counter() - start_time
         return (
-            _figure_map_payload(figures, empty_trace_figures),
+            figures.get("voltage", empty_trace_figures["voltage"]),
+            figures.get("applied_trace", empty_trace_figures["applied_trace"]),
+            figures.get("command_trace", empty_trace_figures["command_trace"]),
+            figures.get("ionic_currents", empty_trace_figures["ionic_currents"]),
+            figures.get("gating", empty_trace_figures["gating"]),
+            figures.get("conductances", empty_trace_figures["conductances"]),
             "tab-vclamp",
             (
-                f"Voltage clamp updated in {elapsed:.3f} s for {neuron.label} from "
-                f"{recording_source_label}: {recording_source_text}."
+                f"Voltage clamp updated in {elapsed:.3f} s for {neuron.label} at "
+                f"patch site {_format_site(vclamp_site)}."
                 + (" Used a default soma voltage step because no voltage step is configured." if used_default_step else "")
             ),
         )
@@ -2169,28 +2171,6 @@ def create_app() -> Dash:
         )
         elapsed = time.perf_counter() - start_time
         return _figure_payload(build_fi_curve_figure(fi_result)), "tab-fi", f"F-I sweep completed in {elapsed:.3f} s for {neuron.label} from {recording_source_label}: {recording_source_text}."
-
-    @app.callback(
-        Output("vclamp-graph-voltage", "figure"),
-        Output("vclamp-graph-applied_trace", "figure"),
-        Output("vclamp-graph-command_trace", "figure"),
-        Output("vclamp-graph-ionic_currents", "figure"),
-        Output("vclamp-graph-gating", "figure"),
-        Output("vclamp-graph-conductances", "figure"),
-        Input("vclamp-figures-store", "data"),
-        Input("results-tabs", "active_tab"),
-    )
-    def render_voltage_clamp_figures(figure_payload, active_tab):
-        del active_tab
-        figures = figure_payload or empty_trace_payload
-        return (
-            figures.get("voltage", empty_trace_payload["voltage"]),
-            figures.get("applied_trace", empty_trace_payload["applied_trace"]),
-            figures.get("command_trace", empty_trace_payload["command_trace"]),
-            figures.get("ionic_currents", empty_trace_payload["ionic_currents"]),
-            figures.get("gating", empty_trace_payload["gating"]),
-            figures.get("conductances", empty_trace_payload["conductances"]),
-        )
 
     @app.callback(
         Output("fi-graph", "figure"),

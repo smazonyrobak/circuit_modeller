@@ -20,8 +20,8 @@ DEFAULT_CONNECTION_PULSE_MS = 1.5
 
 
 def _default_morphology_name() -> str:
-    swc_files = list_available_swc_files()
-    return swc_files[0] if swc_files else "pyramidal_neuron.swc"
+    models = list_available_swc_files()
+    return models[0] if models else "pyramidal_neuron.swc"
 
 
 @dataclass(slots=True)
